@@ -125,7 +125,7 @@ class MirrorListener:
             try:
                 with download_dict_lock:
                     download_dict[self.uid] = ZipStatus(name, m_path, size)
-                path = m_path + ".zip"
+                path = f"{m_path}.zip"
                 LOGGER.info(f"Zip: orig_path: {m_path}, zip_path: {path}")
                 if self.pswd is not None:
                     if self.isLeech and int(size) > TG_SPLIT_SIZE:
@@ -373,7 +373,6 @@ def _mirror(
     message_args = mesg[0].split(" ", maxsplit=1)
     name_args = mesg[0].split("|", maxsplit=1)
     qbitsel = False
-    is_gdtot = False
     try:
         link = message_args[1]
         if link.startswith("s ") or link == "s":
@@ -406,13 +405,8 @@ def _mirror(
 
     reply_to = message.reply_to_message
     if reply_to is not None:
-        file = None
         media_array = [reply_to.document, reply_to.video, reply_to.audio]
-        for i in media_array:
-            if i is not None:
-                file = i
-                break
-
+        file = next((i for i in media_array if i is not None), None)
         if not reply_to.from_user.is_bot:
             if reply_to.from_user.username:
                 tag = f"@{reply_to.from_user.username}"
@@ -465,8 +459,11 @@ def _mirror(
                 link = file.get_file().file_path
 
     if not is_url(link) and not is_magnet(link) and not ospath.exists(link):
-        help_msg = "<b>Send link along with command line:</b>"
-        help_msg += "\n<code>/command</code> {link} |newname pswd: xx [zip/unzip]"
+        help_msg = (
+            "<b>Send link along with command line:</b>"
+            + "\n<code>/command</code> {link} |newname pswd: xx [zip/unzip]"
+        )
+
         help_msg += "\n\n<b>By replying to link or file:</b>"
         help_msg += "\n<code>/command</code> |newname pswd: xx [zip/unzip]"
         help_msg += "\n\n<b>Direct link authorization:</b>"
@@ -494,6 +491,7 @@ def _mirror(
             gmsg += f"Use /{BotCommands.UnzipMirrorCommand} to extracts Google Drive archive file"
             sendMessage(gmsg, bot, message)
         else:
+            is_gdtot = False
             Thread(target=add_gd_download, args=(link, listener, is_gdtot)).start()
 
     if multi > 1:

@@ -30,15 +30,11 @@ def gdtot(url: str) -> str:
     res = client.get(url)
     res = client.get(f"https://new.gdtot.nl/dld?id={url.split('/')[-1]}")
     url = re.findall(r'URL=(.*?)"', res.text)[0]
-    info = {}
-    info["error"] = False
+    info = {"error": False}
     params = parse_qs(urlparse(url).query)
     if "gd" not in params or not params["gd"] or params["gd"][0] == "false":
         info["error"] = True
-        if "msgx" in params:
-            info["message"] = params["msgx"][0]
-        else:
-            info["message"] = "Invalid link"
+        info["message"] = params["msgx"][0] if "msgx" in params else "Invalid link"
     else:
         decoded_id = base64.b64decode(str(params["gd"][0])).decode("utf-8")
         drive_link = f"https://drive.google.com/open?id={decoded_id}"
@@ -129,29 +125,20 @@ def unified(url: str) -> str:
     if info_parsed["error"]:
         raise DirectDownloadLinkException(f"ERROR! {info_parsed['error_message']}")
 
-    if urlparse(url).netloc == "appdrive.in":
-        flink = info_parsed["gdrive_link"]
-        return flink
-    
-    elif urlparse(url).netloc == "gdflix.pro":
-        flink = info_parsed["gdrive_link"]
-        return flink
-
+    if urlparse(url).netloc in ["appdrive.in", "gdflix.pro"]:
+        return info_parsed["gdrive_link"]
     elif urlparse(url).netloc == "driveapp.in":
         res = client.get(info_parsed["gdrive_link"])
         drive_link = etree.HTML(res.content).xpath("//a[contains(@class,'btn')]/@href")[
             0
         ]
-        flink = drive_link
-        return flink
-
+        return drive_link
     else:
         res = client.get(info_parsed["gdrive_link"])
         drive_link = etree.HTML(res.content).xpath(
             "//a[contains(@class,'btn btn-primary')]/@href"
         )[0]
-        flink = drive_link
-        return flink
+        return drive_link
     
 
 def parse_info(res, url):
@@ -160,9 +147,11 @@ def parse_info(res, url):
         info_chunks = re_findall('<td\salign="right">(.*?)<\/td>', res.text)
     elif 'sharer.pw' in url:
         f = re.findall(">(.*?)<\/td>", res.text)
-        info_parsed = {}
-        for i in range(0, len(f), 3):
-            info_parsed[f[i].lower().replace(" ", "_")] = f[i + 2]
+        info_parsed = {
+            f[i].lower().replace(" ", "_"): f[i + 2]
+            for i in range(0, len(f), 3)
+        }
+
         return info_parsed
     else:
         info_chunks = re.findall(">(.*?)<\/td>", res.text)
@@ -212,11 +201,7 @@ def udrive(url: str) -> str:
         decoded_id = res.rsplit('/', 1)[-1]
         flink = f"https://drive.google.com/file/d/{decoded_id}"
         return flink
-    elif 'drivehub' in url:
-        gd_id = res.rsplit("=", 1)[-1]
-        flink = f"https://drive.google.com/open?id={gd_id}"
-        return flink
-    elif 'drivebuzz' in url:
+    elif 'drivehub' in url or 'drivebuzz' in url:
         gd_id = res.rsplit("=", 1)[-1]
         flink = f"https://drive.google.com/open?id={gd_id}"
         return flink
@@ -234,7 +219,7 @@ def udrive(url: str) -> str:
 def sharer_pw_dl(url, forced_login=False):
     
     client = cloudscraper.create_scraper(delay=10, browser="chrome")
-    
+
     client.cookies.update(
         {"XSRF-TOKEN": XSRF_TOKEN, "laravel_session": laravel_session}
     )
@@ -263,7 +248,7 @@ def sharer_pw_dl(url, forced_login=False):
         data["nl"] = 1
 
     try:
-        res = client.post(url + "/dl", headers=headers, data=data).json()
+        res = client.post(f"{url}/dl", headers=headers, data=data).json()
     except:
         return info_parsed
 
@@ -271,13 +256,12 @@ def sharer_pw_dl(url, forced_login=False):
         info_parsed["error"] = False
         info_parsed["gdrive_link"] = res["url"]
 
-    if len(ddl_btn) and not forced_login and not "url" in info_parsed:
+    if len(ddl_btn) and not forced_login and "url" not in info_parsed:
         # retry download via login
         return sharer_pw_dl(url, forced_login=True)
 
     try:
-        flink = info_parsed["gdrive_link"]
-        return flink
+        return info_parsed["gdrive_link"]
     except:
         raise DirectDownloadLinkException(
             "ERROR! File Not Found or User rate exceeded !!"
